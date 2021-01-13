@@ -8,7 +8,7 @@ import torch.distributed as dist
 import torch.nn as nn
 from mmcv.utils import print_log
 
-from mmdet.core import auto_fp16
+from mmcv.runner import auto_fp16
 from mmdet.utils import get_root_logger
 
 
@@ -29,21 +29,18 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
     @property
     def with_shared_head(self):
         """bool: whether the detector has a shared head in the RoI Head"""
-        return hasattr(self.roi_head,
-                       'shared_head') and self.roi_head.shared_head is not None
+        return hasattr(self, 'roi_head') and self.roi_head.with_shared_head
 
     @property
     def with_bbox(self):
         """bool: whether the detector has a bbox head"""
-        return ((hasattr(self.roi_head, 'bbox_head')
-                 and self.roi_head.bbox_head is not None)
+        return ((hasattr(self, 'roi_head') and self.roi_head.with_bbox)
                 or (hasattr(self, 'bbox_head') and self.bbox_head is not None))
 
     @property
     def with_mask(self):
         """bool: whether the detector has a mask head"""
-        return ((hasattr(self.roi_head, 'mask_head')
-                 and self.roi_head.mask_head is not None)
+        return ((hasattr(self, 'roi_head') and self.roi_head.with_mask)
                 or (hasattr(self, 'mask_head') and self.mask_head is not None))
 
     @abstractmethod
@@ -71,7 +68,7 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
             img (list[Tensor]): List of tensors of shape (1, C, H, W).
                 Typically these should be mean centered and std scaled.
             img_metas (list[dict]): List of image info dict where each dict
-                has: 'img_shape', 'scale_factor', 'flip', and my also contain
+                has: 'img_shape', 'scale_factor', 'flip', and may also contain
                 'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.
                 For details on the values of these keys, see
                 :class:`mmdet.datasets.pipelines.Collect`.
@@ -120,6 +117,35 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
         else:
             raise NotImplementedError
 
+    def forward_cam(self, imgs, img_metas, **kwargs):
+        """
+        Args:
+            imgs (List[Tensor]): the outer list indicates test-time
+                augmentations and inner Tensor should have a shape NxCxHxW,
+                which contains all images in the batch.
+            img_metas (List[List[dict]]): the outer list indicates test-time
+                augs (multiscale, flip, etc.) and the inner list indicates
+                images in a batch.
+        """
+        for var, name in [(imgs, 'imgs'), (img_metas, 'img_metas')]:
+            if not isinstance(var, list):
+                raise TypeError(f'{name} must be a list, but got {type(var)}')
+
+        num_augs = len(imgs)
+        if num_augs != len(img_metas):
+            raise ValueError(f'num of augmentations ({len(imgs)}) '
+                             f'!= num of image meta ({len(img_metas)})')
+
+        if num_augs == 1:
+            # proposals (List[List[Tensor]]): the outer list indicates
+            # test-time augs (multiscale, flip, etc.) and the inner list
+            # indicates images in a batch.
+            # The Tensor should have a shape Px4, where P is the number of
+            # proposals.
+            if 'proposals' in kwargs:
+                kwargs['proposals'] = kwargs['proposals'][0]
+            return self.cam_forward(imgs[0], img_metas[0], **kwargs)
+
     def forward_test(self, imgs, img_metas, **kwargs):
         """
         Args:
@@ -138,9 +164,6 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
         if num_augs != len(img_metas):
             raise ValueError(f'num of augmentations ({len(imgs)}) '
                              f'!= num of image meta ({len(img_metas)})')
-        # TODO: remove the restriction of samples_per_gpu == 1 when prepared
-        samples_per_gpu = imgs[0].size(0)
-        assert samples_per_gpu == 1
 
         if num_augs == 1:
             # proposals (List[List[Tensor]]): the outer list indicates
@@ -152,6 +175,9 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
                 kwargs['proposals'] = kwargs['proposals'][0]
             return self.simple_test(imgs[0], img_metas[0], **kwargs)
         else:
+            assert imgs[0].size(0) == 1, 'aug test does not support ' \
+                                         'inference with batch size ' \
+                                         f'{imgs[0].size(0)}'
             # TODO: support test augmentation for predefined proposals
             assert 'proposals' not in kwargs
             return self.aug_test(imgs, img_metas, **kwargs)
@@ -167,6 +193,10 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
         should be double nested (i.e.  List[Tensor], List[List[dict]]), with
         the outer list indicating test time augmentations.
         """
+        if return_loss == "onnx":
+            return self.onnx_forward(img, img_metas, **kwargs)
+        if return_loss == "grad_cam":
+            return self.forward_cam(img, img_metas, **kwargs)
         if return_loss:
             return self.forward_train(img, img_metas, **kwargs)
         else:
@@ -292,6 +322,8 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
         Returns:
             img (Tensor): Only if not `show` or `out_file`
         """
+        # if isinstance(result, list):
+        #     result = result[0]
         img = mmcv.imread(img)
         img = img.copy()
         if isinstance(result, tuple):
@@ -306,6 +338,7 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
             for i, bbox in enumerate(bbox_result)
         ]
         labels = np.concatenate(labels)
+        # labels = np.zeros((len(bboxes))).astype(np.int)
         # draw segmentation masks
         if segm_result is not None and len(labels) > 0:  # non empty
             segms = mmcv.concat_list(segm_result)

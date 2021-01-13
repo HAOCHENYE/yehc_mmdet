@@ -3,7 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import Scale, normal_init
 
-from mmdet.core import distance2bbox, force_fp32, multi_apply, multiclass_nms
+from mmdet.core import distance2bbox, multi_apply, multiclass_nms
+from mmcv.runner import force_fp32
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
 

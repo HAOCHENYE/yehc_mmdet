@@ -25,8 +25,11 @@ class SingleStageDetector(BaseDetector):
         self.backbone = build_backbone(backbone)
         if neck is not None:
             self.neck = build_neck(neck)
-        bbox_head.update(train_cfg=train_cfg)
-        bbox_head.update(test_cfg=test_cfg)
+
+        #TODO 版本兼容！
+        if self._get_name() != 'TTFNet':
+            bbox_head.update(train_cfg=train_cfg)
+            bbox_head.update(test_cfg=test_cfg)
         self.bbox_head = build_head(bbox_head)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -94,6 +97,26 @@ class SingleStageDetector(BaseDetector):
                                               gt_labels, gt_bboxes_ignore)
         return losses
 
+    def cam_forward(self, img, img_metas, rescale=False):
+        """Test function without test time augmentation.
+
+        Args:
+            imgs (list[torch.Tensor]): List of multiple images
+            img_metas (list[dict]): List of image information.
+            rescale (bool, optional): Whether to rescale the results.
+                Defaults to False.
+
+        Returns:
+            np.ndarray: proposals
+        """
+        x = self.extract_feat(img)
+        outs = self.bbox_head(x)
+        # BboxList = self.bbox_head.get_cam_bboxes(
+        #     *outs, img_metas, rescale=rescale)
+
+        # skip post-processing when exporting to ONNX
+        return outs
+
     def simple_test(self, img, img_metas, rescale=False):
         """Test function without test time augmentation.
 
@@ -118,7 +141,33 @@ class SingleStageDetector(BaseDetector):
             bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
             for det_bboxes, det_labels in bbox_list
         ]
-        return bbox_results[0]
+        # return bbox_results[0]
+        #TODO 兼容TTF，不得已为之
+        return bbox_results
+
+    def aug_test(self, imgs, img_metas, rescale=False):
+        """Test function with test time augmentation."""
+        raise NotImplementedError
+
+    def onnx_forward(self, img, img_metas, rescale=False):
+        """Test function without test time augmentation.
+
+        Args:
+            imgs (list[torch.Tensor]): List of multiple images
+            img_metas (list[dict]): List of image information.
+            rescale (bool, optional): Whether to rescale the results.
+                Defaults to False.
+
+        Returns:
+            np.ndarray: proposals
+        """
+        x = self.extract_feat(img)
+        outs = self.bbox_head(x, onnx=True)
+        # skip post-processing when exporting to ONNX
+        if torch.onnx.is_in_onnx_export():
+            return outs
+
+        return outs
 
     def aug_test(self, imgs, img_metas, rescale=False):
         """Test function with test time augmentation."""

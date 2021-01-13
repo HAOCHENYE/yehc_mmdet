@@ -7,7 +7,8 @@ from mmcv.ops import Conv2d
 from mmcv.ops.carafe import CARAFEPack
 from torch.nn.modules.utils import _pair
 
-from mmdet.core import auto_fp16, force_fp32, mask_target
+from mmcv.runner import auto_fp16, force_fp32
+from mmdet.core import mask_target
 from mmdet.models.builder import HEADS, build_loss
 
 BYTES_PER_FLOAT = 4

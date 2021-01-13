@@ -2,6 +2,7 @@ import warnings
 
 import matplotlib.pyplot as plt
 import mmcv
+import numpy as np
 import torch
 from mmcv.ops import RoIAlign, RoIPool
 from mmcv.parallel import collate, scatter
@@ -11,6 +12,7 @@ from mmdet.core import get_classes
 from mmdet.datasets.pipelines import Compose
 from mmdet.models import build_detector
 
+import cv2
 
 def init_detector(config, checkpoint=None, device='cuda:0'):
     """Initialize a detector from config file.
@@ -88,11 +90,18 @@ def inference_detector(model, img):
     """
     cfg = model.cfg
     device = next(model.parameters()).device  # model device
-    # build the data pipeline
-    test_pipeline = [LoadImage()] + cfg.data.test.pipeline[1:]
-    test_pipeline = Compose(test_pipeline)
     # prepare data
-    data = dict(img=img)
+    if isinstance(img, np.ndarray):
+        # directly add img
+        data = dict(img=img)
+        cfg = cfg.copy()
+        # set loading pipeline type
+        cfg.data.test.pipeline[0].type = 'LoadImageFromWebcam'
+    else:
+        # add information into dict
+        data = dict(img_info=dict(filename=img), img_prefix=None)
+    # build the data pipeline
+    test_pipeline = Compose(cfg.data.test.pipeline)
     data = test_pipeline(data)
     data = collate([data], samples_per_gpu=1)
     if next(model.parameters()).is_cuda:
@@ -112,7 +121,7 @@ def inference_detector(model, img):
 
     # forward the model
     with torch.no_grad():
-        result = model(return_loss=False, rescale=True, **data)
+        result = model(return_loss=False, rescale=True, **data)[0]
     return result
 
 
@@ -130,10 +139,9 @@ async def async_inference_detector(model, img):
     cfg = model.cfg
     device = next(model.parameters()).device  # model device
     # build the data pipeline
-    test_pipeline = [LoadImage()] + cfg.data.test.pipeline[1:]
-    test_pipeline = Compose(test_pipeline)
+    test_pipeline = Compose(cfg.data.test.pipeline)
     # prepare data
-    data = dict(img=img)
+    data = dict(img_info=dict(filename=img), img_prefix=None)
     data = test_pipeline(data)
     data = scatter(collate([data], samples_per_gpu=1), [device])[0]
 
@@ -144,7 +152,7 @@ async def async_inference_detector(model, img):
     return result
 
 
-def show_result_pyplot(model, img, result, score_thr=0.3, fig_size=(15, 10)):
+def show_result_pyplot(model, img, result, score_thr=0.3, fig_size=(15, 10), out_file=None):
     """Visualize the detection results on the image.
 
     Args:
@@ -158,6 +166,10 @@ def show_result_pyplot(model, img, result, score_thr=0.3, fig_size=(15, 10)):
     if hasattr(model, 'module'):
         model = model.module
     img = model.show_result(img, result, score_thr=score_thr, show=False)
-    plt.figure(figsize=fig_size)
-    plt.imshow(mmcv.bgr2rgb(img))
-    plt.show()
+    if not out_file:
+        plt.figure(figsize=fig_size)
+        plt.imshow(mmcv.bgr2rgb(img))
+        plt.show()
+    else:
+        # plt.savefig(out_file)
+        cv2.imwrite(out_file, img)

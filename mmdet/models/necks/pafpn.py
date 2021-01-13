@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule
 
-from mmdet.core import auto_fp16
+from mmcv.runner import auto_fp16
 from ..builder import NECKS
 from .fpn import FPN
 

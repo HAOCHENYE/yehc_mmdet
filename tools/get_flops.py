@@ -1,5 +1,6 @@
 import argparse
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import torch
 from mmcv import Config
 
@@ -18,7 +19,7 @@ def parse_args():
         '--shape',
         type=int,
         nargs='+',
-        default=[1280, 800],
+        default=[640, 640],
         help='input image size')
     args = parser.parse_args()
     return args
@@ -36,6 +37,11 @@ def main():
         raise ValueError('invalid input shape')
 
     cfg = Config.fromfile(args.config)
+    # import modules from string list.
+    if cfg.get('custom_imports', None):
+        from mmcv.utils import import_modules_from_strings
+        import_modules_from_strings(**cfg['custom_imports'])
+
     model = build_detector(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
     if torch.cuda.is_available():

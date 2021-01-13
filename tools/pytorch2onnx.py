@@ -1,14 +1,14 @@
 import argparse
 import os.path as osp
 from functools import partial
-
+import tensorwatch as tw
 import mmcv
 import numpy as np
 import onnx
 import onnxruntime as rt
 import torch
 from mmcv.runner import load_checkpoint
-
+from mmcv.cnn import fuse_conv_bn
 from mmdet.models import build_detector
 
 try:
@@ -25,6 +25,7 @@ def pytorch2onnx(model,
                  output_file='tmp.onnx',
                  verify=False,
                  normalize_cfg=None):
+    # model=fuse_conv_bn(model)
     model.cpu().eval()
     # read image
     one_img = mmcv.imread(input_img)
@@ -45,17 +46,35 @@ def pytorch2onnx(model,
     # onnx.export does not support kwargs
     origin_forward = model.forward
     model.forward = partial(
-        model.forward, img_metas=[[one_meta]], return_loss=False)
+        model.forward, img_metas=[[one_meta]], return_loss="onnx")
     # pytorch has some bug in pytorch1.3, we have to fix it
     # by replacing these existing op
     register_extra_symbolics(opset_version)
+    print(tw.model_stats(model, (1, 3, 512, 512)))
+    # output_names = ["P3_logits", "P4_logits", "P5_logits", "P6_logits","P7_logits",
+    #                 "P3_bbox_reg", "P4_bbox_reg", "P5_bbox_reg", "P6_bbox_reg","P7_bbox_reg"]
+    output_names = ["hm", "wh"]
     torch.onnx.export(
-        model, ([one_img]),
+        model, (one_img),
         output_file,
         export_params=True,
         keep_initializers_as_inputs=True,
         verbose=show,
-        opset_version=opset_version)
+        opset_version=11,
+        input_names=['data'],
+        output_names=output_names,
+        do_constant_folding=True,
+
+    )
+    #
+    # torch.onnx.export(
+    #     model, [(one_img)],
+    #     output_file,
+    #     export_params=True,
+    #     keep_initializers_as_inputs=True,
+    #     verbose=show,
+    #     opset_version=opset_version)
+    #
     model.forward = origin_forward
     print(f'Successfully exported ONNX model: {output_file}')
     if verify:
@@ -95,7 +114,7 @@ def parse_args():
     parser.add_argument('--input-img', type=str, help='Images for input')
     parser.add_argument('--show', action='store_true', help='show onnx graph')
     parser.add_argument('--output-file', type=str, default='tmp.onnx')
-    parser.add_argument('--opset-version', type=int, default=11)
+    parser.add_argument('--opset-version', type=int, default=9)
     parser.add_argument(
         '--verify',
         action='store_true',
@@ -104,19 +123,19 @@ def parse_args():
         '--shape',
         type=int,
         nargs='+',
-        default=[800, 1216],
+        default=[512, 512],
         help='input image size')
     parser.add_argument(
         '--mean',
         type=int,
         nargs='+',
-        default=[123.675, 116.28, 103.53],
+        default=[128, 128, 128],
         help='mean value used for preprocess input data')
     parser.add_argument(
         '--std',
         type=int,
         nargs='+',
-        default=[58.395, 57.12, 57.375],
+        default=[128, 128, 128],
         help='variance value used for preprocess input data')
     args = parser.parse_args()
     return args
@@ -152,8 +171,10 @@ if __name__ == '__main__':
 
     # build the model
     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-
+    try:
+        checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+    except:
+        Warning("Path of checkpoint is not correct")
     # conver model to onnx file
     pytorch2onnx(
         model,

@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmcv.cnn import ConvModule, xavier_init
 
-from mmdet.core import auto_fp16
+from mmcv.runner import auto_fp16
 from ..builder import NECKS
 
 
@@ -87,7 +87,7 @@ class FPN(nn.Module):
         self.upsample_cfg = upsample_cfg.copy()
 
         if end_level == -1:
-            self.backbone_end_level = self.num_ins
+            self.backbone_end_level = self.num_ins              #backbone_end_level是输入通道数
             assert num_outs >= self.num_ins - start_level
         else:
             # if end_level < inputs, no extra level is allowed
@@ -135,11 +135,11 @@ class FPN(nn.Module):
             self.fpn_convs.append(fpn_conv)
 
         # add extra conv layers (e.g., RetinaNet)
-        extra_levels = num_outs - self.backbone_end_level + self.start_level
+        extra_levels = num_outs - self.backbone_end_level + self.start_level        #当backbone输入个数
         if self.add_extra_convs and extra_levels >= 1:
             for i in range(extra_levels):
                 if i == 0 and self.add_extra_convs == 'on_input':
-                    in_channels = self.in_channels[self.backbone_end_level - 1]
+                    in_channels = self.in_channels[self.backbone_end_level - 1]     #找到最后input最后一层的通道，进行升通道
                 else:
                     in_channels = out_channels
                 extra_fpn_conv = ConvModule(
@@ -171,10 +171,10 @@ class FPN(nn.Module):
             lateral_conv(inputs[i + self.start_level])
             for i, lateral_conv in enumerate(self.lateral_convs)
         ]
-
+        #s8 s16 s32
         # build top-down path
         used_backbone_levels = len(laterals)
-        for i in range(used_backbone_levels - 1, 0, -1):
+        for i in range(used_backbone_levels - 1, 0, -1):                            #下采样特征融合
             # In some cases, fixing `scale factor` (e.g. 2) is preferred, but
             #  it cannot co-exist with `size` in `F.interpolate`.
             if 'scale_factor' in self.upsample_cfg:
@@ -199,11 +199,11 @@ class FPN(nn.Module):
                     outs.append(F.max_pool2d(outs[-1], 1, stride=2))
             # add conv layers on top of original feature maps (RetinaNet)
             else:
-                if self.add_extra_convs == 'on_input':
+                if self.add_extra_convs == 'on_input':                  #下采样在backbone输出中进行
                     extra_source = inputs[self.backbone_end_level - 1]
-                elif self.add_extra_convs == 'on_lateral':
+                elif self.add_extra_convs == 'on_lateral':              #下采样在lateral输出中进行
                     extra_source = laterals[-1]
-                elif self.add_extra_convs == 'on_output':
+                elif self.add_extra_convs == 'on_output':               #下采样在fpn_conv输出中进行
                     extra_source = outs[-1]
                 else:
                     raise NotImplementedError

@@ -11,11 +11,9 @@ from .sampling_result import SamplingResult
 class ScoreHLRSampler(BaseSampler):
     r"""Importance-based Sample Reweighting (ISR_N), described in `Prime Sample
     Attention in Object Detection <https://arxiv.org/abs/1904.04821>`_.
-
     Score hierarchical local rank (HLR) differentiates with RandomSampler in
     negative part. It firstly computes Score-HLR in a two-step way,
     then linearly maps score hlr to the loss weights.
-
     Args:
         num (int): Total number of sampled RoIs.
         pos_fraction (float): Fraction of positive samples.
@@ -61,15 +59,12 @@ class ScoreHLRSampler(BaseSampler):
     @staticmethod
     def random_choice(gallery, num):
         """Randomly select some elements from the gallery.
-
         If `gallery` is a Tensor, the returned indices will be a Tensor;
         If `gallery` is a ndarray or list, the returned indices will be a
         ndarray.
-
         Args:
             gallery (Tensor | ndarray | list): indices pool.
             num (int): expected sample num.
-
         Returns:
             Tensor or ndarray: sampled indices.
         """
@@ -77,8 +72,11 @@ class ScoreHLRSampler(BaseSampler):
 
         is_tensor = isinstance(gallery, torch.Tensor)
         if not is_tensor:
-            gallery = torch.tensor(
-                gallery, dtype=torch.long, device=torch.cuda.current_device())
+            if torch.cuda.is_available():
+                device = torch.cuda.current_device()
+            else:
+                device = 'cpu'
+            gallery = torch.tensor(gallery, dtype=torch.long, device=device)
         perm = torch.randperm(gallery.numel(), device=gallery.device)[:num]
         rand_inds = gallery[perm]
         if not is_tensor:
@@ -101,7 +99,6 @@ class ScoreHLRSampler(BaseSampler):
                     img_meta=None,
                     **kwargs):
         """Sample negative samples.
-
         Score-HLR sampler is done in the following steps:
         1. Take the maximum positive score prediction of each negative samples
             as s_i.
@@ -114,7 +111,6 @@ class ScoreHLRSampler(BaseSampler):
             (2) In the same score rank across different groups,
                 rank samples with their scores again.
         5. Linearly map Score-HLR to the final label weights.
-
         Args:
             assign_result (:obj:`AssignResult`): result of assigner.
             num_expected (int): Expected number of samples.
@@ -217,16 +213,13 @@ class ScoreHLRSampler(BaseSampler):
                img_meta=None,
                **kwargs):
         """Sample positive and negative bboxes.
-
         This is a simple implementation of bbox sampling given candidates,
         assigning results and ground truth bboxes.
-
         Args:
             assign_result (:obj:`AssignResult`): Bbox assigning results.
             bboxes (Tensor): Boxes to be sampled from.
             gt_bboxes (Tensor): Ground truth bboxes.
             gt_labels (Tensor, optional): Class labels of ground truth bboxes.
-
         Returns:
             tuple[:obj:`SamplingResult`, Tensor]: Sampling result and negetive
                 label weights.
