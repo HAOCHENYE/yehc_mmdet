@@ -16,6 +16,12 @@ try:
 except ModuleNotFoundError:
     raise NotImplementedError('please update mmcv to version>=v1.0.4')
 
+def load(module, prefix=''):
+    for name, child in module._modules.items():
+        if not hasattr(child, 'fuse_conv'):
+            load(child, prefix + name + '.')
+        else:
+            child.fuse_conv()
 
 def pytorch2onnx(model,
                  input_img,
@@ -47,13 +53,14 @@ def pytorch2onnx(model,
     origin_forward = model.forward
     model.forward = partial(
         model.forward, img_metas=[[one_meta]], return_loss="onnx")
+    load(model)
     # pytorch has some bug in pytorch1.3, we have to fix it
     # by replacing these existing op
     register_extra_symbolics(opset_version)
     print(tw.model_stats(model, (1, 3, 512, 512)))
-    # output_names = ["P3_logits", "P4_logits", "P5_logits", "P6_logits","P7_logits",
-    #                 "P3_bbox_reg", "P4_bbox_reg", "P5_bbox_reg", "P6_bbox_reg","P7_bbox_reg"]
-    output_names = ["hm", "wh"]
+    output_names = ["P3_logits", "P4_logits", "P5_logits", "P6_logits","P7_logits",
+                    "P3_bbox_reg", "P4_bbox_reg", "P5_bbox_reg", "P6_bbox_reg","P7_bbox_reg"]
+    # output_names = ["hm", "wh"]
     torch.onnx.export(
         model, (one_img),
         output_file,

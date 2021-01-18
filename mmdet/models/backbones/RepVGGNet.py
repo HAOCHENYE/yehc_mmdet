@@ -15,9 +15,9 @@ class RepVGGStage(nn.Module):
 
         for num in range(num_block):
             if num == 0:
-                LayerDict[{"Block{}".format(num)}] = CONV_TYPE(in_ch, stage_ch, group=group, stride=2)
+                LayerDict["Block{}".format(num)] = CONV_TYPE(in_ch, stage_ch, group=group, stride=2)
                 continue
-            LayerDict[{"Block{}".format(num)}] = CONV_TYPE(stage_ch, stage_ch, group=group, stride=1)
+            LayerDict["Block{}".format(num)] = CONV_TYPE(stage_ch, stage_ch, group=group, stride=1)
         self.Block = nn.Sequential(LayerDict)
 
     def forward(self, x):

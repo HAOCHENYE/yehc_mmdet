@@ -264,6 +264,7 @@ class BaseDetector(nn.Module, metaclass=ABCMeta):
                 DDP, it means the batch size on each GPU), which is used for \
                 averaging the logs.
         """
+        # data['img'] = data['img'].contiguous(memory_format=torch.channels_last)
         losses = self(**data)
         loss, log_vars = self._parse_losses(losses)
 

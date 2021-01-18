@@ -152,6 +152,8 @@ def main():
 
     model = build_detector(
         cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg)
+    # model = model.to(memory_format=torch.channels_last)
+
 
     datasets = [build_dataset(cfg.data.train)]
     if len(cfg.workflow) == 2:

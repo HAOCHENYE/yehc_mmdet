@@ -1,10 +1,10 @@
 import torch.nn as nn
+import torch
 from mmcv.cnn import fuse_conv_bn
 from mmcv.cnn import ConvModule
-import torch.nn.functional as F
-from ..build import CUSTOM_CONV_OP
-import torch
-@CUSTOM_CONV_OP.register_module()
+from torch.nn import functional as F
+
+
 class RepVGGBlock(nn.Module):
     def __init__(self, in_ch, out_ch, kernel_size=3, stride=1, group=1, norm_cfg=dict(type='BN', requires_grad=True)):
         super(RepVGGBlock, self).__init__()
@@ -52,11 +52,8 @@ class RepVGGBlock(nn.Module):
                                   :,
                                   self.kernel_size // 2:self.kernel_size // 2 + 1,
                                   self.kernel_size // 2:self.kernel_size // 2 + 1] += self.conv_1x1.conv.weight
-
-        self.conv_3x3.conv.bias = torch.nn.Parameter(self.conv_1x1.conv.bias + self.conv_3x3.conv.bias)
-
         if self.stride == 1 and self.in_ch == self.out_ch:
-            short_cut_weight = torch.nn.Parameter(torch.eye(self.in_ch).reshape(self.in_ch, self.in_ch, 1, 1)).to(self.conv_3x3.conv.weight.device)
+            short_cut_weight = torch.nn.Parameter(torch.eye(self.in_ch).reshape(self.in_ch, self.in_ch, 1, 1))
             self.conv_3x3.conv.weight[:,
                                       :,
                                       self.kernel_size // 2:self.kernel_size // 2 + 1,
@@ -72,3 +69,13 @@ class RepVGGBlock(nn.Module):
             res += out[i]
         res = F.relu(res)
         return res
+
+x = torch.randn(1, 64, 256, 256)
+RepVGGUnit = RepVGGBlock(64, 32, stride=2)
+RepVGGUnit.eval()
+y_train = RepVGGUnit(x)
+RepVGGUnit.fuse_conv()
+y_test = RepVGGUnit(x)
+
+print(torch.abs((y_train-y_test).sum()))
+# print((y_train == y_test).all())

@@ -3,6 +3,12 @@ import cv2
 from mmdet.apis import inference_detector, init_detector, show_result_pyplot
 import os
 
+def load(module, prefix=''):
+    for name, child in module._modules.items():
+        if not hasattr(child, 'fuse_conv'):
+            load(child, prefix + name + '.')
+        else:
+            child.fuse_conv()
 
 def main():
     parser = ArgumentParser()
@@ -18,7 +24,7 @@ def main():
     args = parser.parse_args()
 
     model = init_detector(args.config, args.checkpoint, device=args.device)
-
+    load(model)
     ImageList = os.listdir(args.img)
     for ImageName in ImageList:
         ImagePath = os.path.join(args.img, ImageName)

@@ -39,6 +39,8 @@ class EpochBasedRunner(BaseRunner):
 
     def train(self, data_loader, **kwargs):
         self.model.train()
+        # self.model = self.model.to(memory_format=torch.channels_last)
+
         self.mode = 'train'
         self.data_loader = data_loader
         self._max_iters = self._max_epochs * len(self.data_loader)
