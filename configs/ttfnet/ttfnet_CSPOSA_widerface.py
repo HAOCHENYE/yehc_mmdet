@@ -52,13 +52,13 @@ test_cfg = dict(
     max_per_img=100)
 # dataset settings
 
-optimizer = dict(type='AdamW', lr=0.001)
-optimizer_config = dict(grad_clip=None)
+# optimizer = dict(type='AdamW', lr=0.001)
+# optimizer_config = dict(grad_clip=None)
 
 evaluation = dict(interval=5, metric='bbox', classwise=True)
 
-# optimizer = dict(type='SGD', lr=base_lr, momentum=0.937, weight_decay=0.0005)
-# optimizer_config = dict(grad_clip=None)
+optimizer = dict(type='SGD', lr=base_lr, momentum=0.937, weight_decay=0.0005)
+optimizer_config = dict(grad_clip=None)
 
 
 lr_config = dict(
@@ -67,6 +67,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=warmup_iters,
     warmup_ratio=0.001)
+total_epochs = 300
 
 checkpoint_config = dict(interval=5)
 log_config = dict(
@@ -76,7 +77,7 @@ log_config = dict(
 
 # custom_hooks = [dict(type="EMAHook", warm_up=warmup_iters, resume_from=None, priority='HIGHEST')]
 
-total_epochs = 300
+
 
 device_ids = range(2)
 dist_params = dict(backend='nccl')

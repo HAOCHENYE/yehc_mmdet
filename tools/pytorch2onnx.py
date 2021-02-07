@@ -58,9 +58,9 @@ def pytorch2onnx(model,
     # by replacing these existing op
     register_extra_symbolics(opset_version)
     print(tw.model_stats(model, (1, 3, 512, 512)))
-    output_names = ["P3_logits", "P4_logits", "P5_logits", "P6_logits","P7_logits",
-                    "P3_bbox_reg", "P4_bbox_reg", "P5_bbox_reg", "P6_bbox_reg","P7_bbox_reg"]
-    # output_names = ["hm", "wh"]
+    # output_names = ["P3_logits", "P4_logits", "P5_logits", "P6_logits","P7_logits",
+    #                 "P3_bbox_reg", "P4_bbox_reg", "P5_bbox_reg", "P6_bbox_reg","P7_bbox_reg"]
+    output_names = ["hm", "wh"]
     torch.onnx.export(
         model, (one_img),
         output_file,

@@ -21,7 +21,7 @@ model = dict(
     bbox_head=dict(
         type='VFNetDeployPrivateHead',
         norm_cfg=dict(type='BN', requires_grad=True),
-        num_classes=4,
+        num_classes=6,
         in_channels=64,
         stacked_convs=2,
         feat_channels=64,
@@ -57,6 +57,12 @@ test_cfg = dict(
 train_pipline = [
             dict(type='LoadImageFromFile', to_float32=True),
             dict(type='LoadAnnotations', with_bbox=True),
+            dict(type='LoadPasetImages',
+                 class_names=["fake_person", "camera"],
+                 base_cls_num=3,
+                 image_root="/home/video/user/yehc/home_version/mmdetection_64/data_paste",
+                 to_float32=True,
+                 ),
             dict(
                 type='Resize',
                 img_scale=[(1333, 480), (1333, 960)],
@@ -95,7 +101,7 @@ val_pipline = [
                 ])
         ]
 data = dict(
-    samples_per_gpu=16,
+    samples_per_gpu=20,
     workers_per_gpu=4,
     train=dict(
         type='CocoDataset',
@@ -106,15 +112,15 @@ data = dict(
 
     val=dict(
         type='CocoDataset',
-        ann_file=data_root + "annotations/coco_half_person_80_val.json",
-        img_prefix=data_root + 'val2017',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        ann_file=data_root + "annotations/coco_half_person_82_camera_fake_personval.json",
+        img_prefix=data_root + 'val2017_camera_doll',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'fake_person', 'camera'],
         pipeline=val_pipline),
     test=dict(
         type='CocoDataset',
-        ann_file=data_root + "annotations/coco_half_person_80_val.json",
-        img_prefix=data_root + 'val2017',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        ann_file=data_root + "annotations/coco_half_person_82_camera_fake_personval.json",
+        img_prefix=data_root + 'val2017_camera_doll',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'fake_person', 'camera'],
         pipeline=val_pipline))
 
 evaluation = dict(interval=2, metric='bbox', classwise=True)
@@ -140,14 +146,13 @@ log_config = dict(
            dict(type='TensorboardLoggerHook')])
 
 # custom_hooks = [dict(type="EMAHook", momentum=0.1, interval=2, warm_up=warmup_iters, resume_from=None, priority='HIGHEST')]
-
 device_ids = range(0, 2)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 # work_dir = 'work_dirs/paa_atss_OSACSP_pafpn_private_SGD_lr0.32_cosine_ema'
-work_dir = 'work_dirs/vfnet_RepVGG_4cls/'
+work_dir = 'work_dirs/vfnet_RepVGG_5x5_6cls/'
 load_from = None
-resume_from = 'work_dirs/vfnet_RepVGG_4cls/latest.pth'
+resume_from = 'work_dirs/vfnet_RepVGG_5x5_6cls/finetune.pth'
 # resume_from = None
 workflow = [('train', 1)]
 gpu_ids = range(0, 2)

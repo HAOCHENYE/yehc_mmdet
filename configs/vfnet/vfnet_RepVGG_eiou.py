@@ -38,8 +38,8 @@ model = dict(
             gamma=2.0,
             iou_weighted=True,
             loss_weight=1.0),
-        loss_bbox=dict(type='CIoULoss', loss_weight=1.5),
-        loss_bbox_refine=dict(type='CIoULoss', loss_weight=2.0)))
+        loss_bbox=dict(type='FocalEIoULoss', loss_weight=1.5),
+        loss_bbox_refine=dict(type='FocalEIoULoss', loss_weight=2.0)))
 
 # training and testing settings
 train_cfg = dict(
@@ -117,7 +117,7 @@ data = dict(
         classes=['person', 'bottle', 'chair', 'potted plant'],
         pipeline=val_pipline))
 
-evaluation = dict(interval=2, metric='bbox', classwise=True)
+evaluation = dict(interval=1, metric='bbox', classwise=True)
 
 
 
@@ -128,10 +128,10 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=2000,
     warmup_ratio=0.01,
-    step=[90, 130])
+    step=[90, 110])
 # learning policy
 
-total_epochs = 140
+total_epochs = 120
 
 checkpoint_config = dict(interval=1)
 log_config = dict(
@@ -145,9 +145,9 @@ device_ids = range(0, 2)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 # work_dir = 'work_dirs/paa_atss_OSACSP_pafpn_private_SGD_lr0.32_cosine_ema'
-work_dir = 'work_dirs/vfnet_RepVGG_4cls/'
+work_dir = 'work_dirs/vfnet_RepVGG_eiou/'
 load_from = None
-resume_from = 'work_dirs/vfnet_RepVGG_4cls/latest.pth'
+resume_from = 'work_dirs/vfnet_RepVGG_4cls/epoch_90.pth'
 # resume_from = None
 workflow = [('train', 1)]
 gpu_ids = range(0, 2)

@@ -9,6 +9,8 @@ from .resnet import ResNet
 import torch
 import torch.nn as nn
 
+import torch.utils.checkpoint as cp
+
 class DyReLU(nn.Module):
     def __init__(self, channels, reduction=4, k=2, conv_type='2d'):
         super(DyReLU, self).__init__()
@@ -108,6 +110,9 @@ class Bottleneck(_Bottleneck):
             width = math.floor(self.planes *
                                (base_width / base_channels)) * groups
 
+        self.relu1 = DyReLUB(inplanes)
+        self.relu2 = DyReLUB(width)
+
         self.norm1_name, norm1 = build_norm_layer(
             self.norm_cfg, width, postfix=1)
         self.norm2_name, norm2 = build_norm_layer(
@@ -160,9 +165,50 @@ class Bottleneck(_Bottleneck):
             bias=False)
         self.add_module(self.norm3_name, norm3)
 
+    def forward(self, x):
+        """Forward function."""
+
+        def _inner_forward(x):
+            identity = x
+
+            out = self.conv1(x)
+            out = self.norm1(out)
+            out = self.relu1(out)
+
+            if self.with_plugins:
+                out = self.forward_plugin(out, self.after_conv1_plugin_names)
+
+            out = self.conv2(out)
+            out = self.norm2(out)
+            out = self.relu2(out)
+
+            if self.with_plugins:
+                out = self.forward_plugin(out, self.after_conv2_plugin_names)
+
+            out = self.conv3(out)
+            out = self.norm3(out)
+
+            if self.with_plugins:
+                out = self.forward_plugin(out, self.after_conv3_plugin_names)
+
+            if self.downsample is not None:
+                identity = self.downsample(x)
+
+            out += identity
+
+            return out
+
+        if self.with_cp and x.requires_grad:
+            out = cp.checkpoint(_inner_forward, x)
+        else:
+            out = _inner_forward(x)
+
+        out = self.relu(out)
+
+        return out
 
 @BACKBONES.register_module()
-class ResNeXt(ResNet):
+class ResNeXtDy(ResNet):
     """ResNeXt backbone.
 
     Args:

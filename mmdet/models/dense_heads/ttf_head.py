@@ -8,7 +8,7 @@ import numpy as np
 from mmcv.ops import ModulatedDeformConv2dPack as ModulatedDeformConvPack
 from mmdet.core import multi_apply, calc_region
 from mmcv.runner import force_fp32
-from mmdet.models.losses import ct_focal_loss, giou_loss_ct
+from mmdet.models.losses import ct_focal_loss, giou_loss_ct, eiou_loss_ct
 from mmcv.cnn import (build_norm_layer, bias_init_with_prob, ConvModule)
 
 
@@ -40,7 +40,8 @@ class TTFHead(AnchorHead):
                  beta=0.54,
                  hm_weight=1.,
                  wh_weight=5.,
-                 max_objs=128):
+                 max_objs=128,
+                 reg_loss_type='giou_loss_ct'):
         super(AnchorHead, self).__init__()
         assert len(planes) in [2, 3, 4]
         assert wh_area_process in [None, 'norm', 'log', 'sqrt']
@@ -65,6 +66,7 @@ class TTFHead(AnchorHead):
         self.wh_planes = 4 if wh_agnostic else 4 * self.num_fg
         self.base_loc = None
 
+        exec("self.regloss = {}".format(reg_loss_type))
         # repeat upsampling n times. 32x to 4x by default.
         if not self.use_dla:
             shortcut_num = min(len(inplanes) - 1, len(planes))
@@ -489,7 +491,7 @@ class TTFHead(AnchorHead):
                                 self.base_loc + pred_wh[:, [2, 3]]), dim=1).permute(0, 2, 3, 1)
         # (batch, h, w, 4)
         boxes = box_target.permute(0, 2, 3, 1)
-        wh_loss = giou_loss_ct(pred_boxes, boxes, mask, avg_factor=avg_factor) * self.wh_weight
+        wh_loss = self.regloss(pred_boxes, boxes, mask, avg_factor=avg_factor) * self.wh_weight
 
         return hm_loss, wh_loss
 

@@ -56,7 +56,8 @@ class RepVGGBlock(nn.Module):
         self.conv_3x3.conv.bias = torch.nn.Parameter(self.conv_1x1.conv.bias + self.conv_3x3.conv.bias)
 
         if self.stride == 1 and self.in_ch == self.out_ch:
-            short_cut_weight = torch.nn.Parameter(torch.eye(self.in_ch).reshape(self.in_ch, self.in_ch, 1, 1)).to(self.conv_3x3.conv.weight.device)
+            short_cut_weight = torch.nn.Parameter(torch.eye(self.in_ch) \
+                                                  .reshape(self.in_ch, self.in_ch, 1, 1)).to(self.conv_3x3.conv.weight.device)
             self.conv_3x3.conv.weight[:,
                                       :,
                                       self.kernel_size // 2:self.kernel_size // 2 + 1,

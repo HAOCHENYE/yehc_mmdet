@@ -97,6 +97,10 @@ class CustomDataset(Dataset):
                 self.proposals = [self.proposals[i] for i in valid_inds]
             # set group flag for the sampler
             self._set_group_flag()
+            #TODO 为了在合成后的validation中跑验证集合
+        else:
+            valid_inds = self._filter_imgs()
+            self.data_infos = [self.data_infos[i] for i in valid_inds]
 
         # processing pipeline
         self.pipeline = Compose(pipeline)

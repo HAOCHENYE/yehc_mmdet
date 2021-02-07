@@ -1690,3 +1690,54 @@ class CutOut(object):
                      else f'cutout_shape={self.candidates}, ')
         repr_str += f'fill_in={self.fill_in})'
         return repr_str
+
+
+class MixUp(object):
+    def __init__(self, p=0.3, lambd=0.5):
+        self.lambd = lambd
+        self.p = p
+        self.img2 = None
+        self.boxes2 = None
+        self.labels2 = None
+
+    def __call__(self, results):
+        img1, boxes1, labels1 = [
+            results[k] for k in ('img', 'gt_bboxes', 'gt_labels')
+        ]
+
+        if random.random() < self.p and self.img2 is not None and img1.shape[1] == self.img2.shape[1]:
+            # print("********** start mixup **********")
+            # print('label:', labels1,self.labels2)
+            # print('boxes:', boxes1,self.boxes2)
+            # self.lambd = np.random.beta(2, 2)
+            # self.lambd = np.random.beta(1.5,1.5)
+
+            height = max(img1.shape[0], self.img2.shape[0])
+            width = max(img1.shape[1], self.img2.shape[1])
+            mixup_image = np.zeros([height, width, 3], dtype='float32')
+            mixup_image[:img1.shape[0], :img1.shape[1], :] = img1.astype('float32') * self.lambd
+            mixup_image[:self.img2.shape[0], :self.img2.shape[1], :] += self.img2.astype('float32') * (1. - self.lambd)
+            mixup_image = mixup_image.astype('uint8')
+            # mixup_image = np.zeros([height, width, 3])
+
+            # mixup_image[:img1.shape[0], :img1.shape[1], :] = img1 * self.lambd
+            # mixup_image[:self.img2.shape[0], :self.img2.shape[1], :] += self.img2 * (1. - self.lambd) # �ϲ�
+            # y1 = np.vstack((boxes1, np.full((boxes1.shape[0], 1), self.lambd)))
+            # y2 = np.hstack((self.boxes2, np.full((self.boxes2.shape[0], 1), 1. - self.lambd)))
+            # mixup_boxes = np.vstack((y1, y2))
+            mixup_boxes = np.vstack((boxes1, self.boxes2))
+            mixup_label = np.hstack((labels1, self.labels2))
+            # print(self.lambd,mixup_boxes,mixup_label)
+            results['img'] = mixup_image
+            results['gt_bboxes'] = mixup_boxes
+            results['gt_labels'] = mixup_label
+            # cv2.imwrite('./mixup/mixup'+str(mixup_label)+'.jpg',mixup_image)
+            # print(mixup_label)
+        else:
+            pass
+            # print("********** not mixup **********")
+        self.img2 = img1
+        self.boxes2 = boxes1
+        self.labels2 = labels1
+        return results
+

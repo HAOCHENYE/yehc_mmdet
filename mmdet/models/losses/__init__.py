@@ -9,7 +9,7 @@ from .gfocal_loss import DistributionFocalLoss, QualityFocalLoss
 from .focal_loss import FocalLoss, sigmoid_focal_loss, ct_focal_loss
 from .ghm_loss import GHMC, GHMR
 from .iou_loss import (BoundedIoULoss, CIoULoss, DIoULoss, GIoULoss, IoULoss,
-                       bounded_iou_loss, iou_loss, giou_loss, giou_loss_ct)
+                       bounded_iou_loss, iou_loss, giou_loss, giou_loss_ct, eiou_loss_ct)
 from .mse_loss import MSELoss, mse_loss
 from .pisa_loss import carl_loss, isr_p
 from .smooth_l1_loss import L1Loss, SmoothL1Loss, l1_loss, smooth_l1_loss
