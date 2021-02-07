@@ -11,7 +11,7 @@ from .utils import replace_ImageToTensor
 from .voc import VOCDataset
 from .wider_face import WIDERFaceDataset
 from .xml_style import XMLDataset
-
+from .ray import RayDataset
 __all__ = [
     'CustomDataset', 'XMLDataset', 'CocoDataset', 'DeepFashionDataset',
     'VOCDataset', 'CityscapesDataset', 'LVISDataset', 'LVISV05Dataset',

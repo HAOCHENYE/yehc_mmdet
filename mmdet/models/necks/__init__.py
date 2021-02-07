@@ -10,7 +10,8 @@ from .CSP_pafpn import CSP_PAFPN
 from .YeFPN import YeFPN
 from .fuse_fpn import FuseFPN
 from .YeFPNv2 import YeFPNv2
+from .YeFPNv2_6o import YeFPNv2_6o
 __all__ = [
     'FPN', 'BFP', 'HRFPN', 'NASFPN', 'FPN_CARAFE', 'PAFPN', 'NASFCOS_FPN',
-    'RFP', 'CSP_PAFPN', 'YeFPN', 'FuseFPN', 'YeFPNv2'
+    'RFP', 'CSP_PAFPN', 'YeFPN', 'FuseFPN', 'YeFPNv2', 'YeFPNv2_6o'
 ]
