@@ -8,7 +8,7 @@ from mmdet.core import (anchor_inside_flags, build_assigner, build_sampler,
                         images_to_levels, multi_apply, multiclass_nms, unmap)
 from ..builder import HEADS, build_loss
 from .anchor_head import AnchorHead
-
+from mmdet.core.bbox.samplers.combined_sampler import CombinedSampler
 EPS = 1e-12
 
 
@@ -590,9 +590,12 @@ class ATSSHead(AnchorHead):
         assign_result = self.assigner.assign(anchors, num_level_anchors_inside,
                                              gt_bboxes, gt_bboxes_ignore,
                                              gt_labels)
-
-        sampling_result = self.sampler.sample(assign_result, anchors,
-                                              gt_bboxes)
+        if not isinstance(self.sampler, CombinedSampler):
+            sampling_result = self.sampler.sample(assign_result, anchors,
+                                                  gt_bboxes)
+        else:
+            sampling_result = self.sampler.sample(assign_result, anchors,
+                                                  gt_bboxes, gt_labels)
 
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)

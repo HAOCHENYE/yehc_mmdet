@@ -68,6 +68,7 @@ class VFNetDeployPrivateHead(ATSSHead, FCOSHead):
                  sync_num_pos=True,
                  gradient_mul=0.1,
                  bbox_norm_type='reg_denom',
+                 sample_cfg = dict(type='PseudoSampler'),
                  loss_cls_fl=dict(
                      type='FocalLoss',
                      use_sigmoid=True,
@@ -130,7 +131,7 @@ class VFNetDeployPrivateHead(ATSSHead, FCOSHead):
         self.sampling = False
         if self.train_cfg:
             self.assigner = build_assigner(self.train_cfg.assigner)
-            sampler_cfg = dict(type='PseudoSampler')
+            sampler_cfg = sample_cfg
             self.sampler = build_sampler(sampler_cfg, context=self)
 
     def _init_layers(self):

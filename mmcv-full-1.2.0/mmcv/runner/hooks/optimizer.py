@@ -13,9 +13,9 @@ from .hook import HOOKS, Hook
 @HOOKS.register_module()
 class OptimizerHook(Hook):
 
-    def __init__(self, grad_clip=None):
+    def __init__(self, grad_clip=None, update_iter=1):
         self.grad_clip = grad_clip
-
+        self.update_iter = update_iter
     def clip_grads(self, params):
         params = list(
             filter(lambda p: p.requires_grad and p.grad is not None, params))
@@ -23,15 +23,18 @@ class OptimizerHook(Hook):
             return clip_grad.clip_grad_norm_(params, **self.grad_clip)
 
     def after_train_iter(self, runner):
-        runner.optimizer.zero_grad()
-        runner.outputs['loss'].backward()
-        if self.grad_clip is not None:
-            grad_norm = self.clip_grads(runner.model.parameters())
-            if grad_norm is not None:
-                # Add grad norm to the logger
-                runner.log_buffer.update({'grad_norm': float(grad_norm)},
-                                         runner.outputs['num_samples'])
-        runner.optimizer.step()
+        (runner.outputs['loss'] / self.update_iter).backward()
+        if runner._inner_iter % self.update_iter == 0:
+            runner.optimizer.step()
+            runner.optimizer.zero_grad()
+            if self.grad_clip is not None:
+                grad_norm = self.clip_grads(runner.model.parameters())
+                if grad_norm is not None:
+                    # Add grad norm to the logger
+                    runner.log_buffer.update({'grad_norm': float(grad_norm)},
+                                             runner.outputs['num_samples'])
+        else:
+            pass
 
 
 @HOOKS.register_module()
@@ -57,11 +60,13 @@ class Fp16OptimizerHook(OptimizerHook):
                  coalesce=True,
                  bucket_size_mb=-1,
                  loss_scale=512.,
-                 distributed=True):
+                 distributed=True,
+                 update_iter=1):
         self.grad_clip = grad_clip
         self.coalesce = coalesce
         self.bucket_size_mb = bucket_size_mb
         self.distributed = distributed
+        self.update_iter = update_iter
         if loss_scale == 'dynamic':
             self.loss_scaler = LossScaler(mode='dynamic')
         elif isinstance(loss_scale, float):
@@ -105,6 +110,50 @@ class Fp16OptimizerHook(OptimizerHook):
         for fp16_param, fp32_param in zip(fp16_net.parameters(), fp32_weights):
             fp16_param.data.copy_(fp32_param.data)
 
+    # def after_train_iter(self, runner):
+    #     """Backward optimization steps for Mixed Precision Training. For
+    #     dynamic loss scaling, please refer `loss_scalar.py`
+    #
+    #     1. Scale the loss by a scale factor.
+    #     2. Backward the loss to obtain the gradients (fp16).
+    #     3. Copy gradients from the model to the fp32 weight copy.
+    #     4. Scale the gradients back and update the fp32 weight copy.
+    #     5. Copy back the params from fp32 weight copy to the fp16 model.
+    #     """
+    #     # clear grads of last iteration
+    #     runner.model.zero_grad()
+    #     runner.optimizer.zero_grad()
+    #     # scale the loss value
+    #     scaled_loss = runner.outputs['loss'] * self.loss_scaler.loss_scale
+    #     scaled_loss.backward()
+    #     # copy fp16 grads in the model to fp32 params in the optimizer
+    #
+    #     fp32_weights = []
+    #     for param_group in runner.optimizer.param_groups:
+    #         fp32_weights += param_group['params']
+    #     self.copy_grads_to_fp32(runner.model, fp32_weights)
+    #     # allreduce grads
+    #     if self.distributed:
+    #         allreduce_grads(fp32_weights, self.coalesce, self.bucket_size_mb)
+    #
+    #     has_overflow = self.loss_scaler.has_overflow(fp32_weights)
+    #     # if has overflow, skip this iteration
+    #     if not has_overflow:
+    #         # scale the gradients back
+    #         for param in fp32_weights:
+    #             if param.grad is not None:
+    #                 param.grad.div_(self.loss_scaler.loss_scale)
+    #         if self.grad_clip is not None:
+    #             self.clip_grads(fp32_weights)
+    #         # update fp32 params
+    #         runner.optimizer.step()
+    #         # copy fp32 params to the fp16 model
+    #         self.copy_params_to_fp16(runner.model, fp32_weights)
+    #     self.loss_scaler.update_scale(has_overflow)
+    #     if has_overflow:
+    #         runner.logger.warning('Check overflow, downscale loss scale '
+    #                               f'to {self.loss_scaler.cur_scale}')
+
     def after_train_iter(self, runner):
         """Backward optimization steps for Mixed Precision Training. For
         dynamic loss scaling, please refer `loss_scalar.py`
@@ -116,35 +165,38 @@ class Fp16OptimizerHook(OptimizerHook):
         5. Copy back the params from fp32 weight copy to the fp16 model.
         """
         # clear grads of last iteration
-        runner.model.zero_grad()
-        runner.optimizer.zero_grad()
+        if runner._inner_iter == 0:
+            runner.model.zero_grad()
+            runner.optimizer.zero_grad()
         # scale the loss value
         scaled_loss = runner.outputs['loss'] * self.loss_scaler.loss_scale
-        scaled_loss.backward()
+        (scaled_loss / self.update_iter).backward()
         # copy fp16 grads in the model to fp32 params in the optimizer
+        if runner._inner_iter % self.update_iter == 0:
+            fp32_weights = []
+            for param_group in runner.optimizer.param_groups:
+                fp32_weights += param_group['params']
+            self.copy_grads_to_fp32(runner.model, fp32_weights)
+            # allreduce grads
+            if self.distributed:
+                allreduce_grads(fp32_weights, self.coalesce, self.bucket_size_mb)
 
-        fp32_weights = []
-        for param_group in runner.optimizer.param_groups:
-            fp32_weights += param_group['params']
-        self.copy_grads_to_fp32(runner.model, fp32_weights)
-        # allreduce grads
-        if self.distributed:
-            allreduce_grads(fp32_weights, self.coalesce, self.bucket_size_mb)
-
-        has_overflow = self.loss_scaler.has_overflow(fp32_weights)
-        # if has overflow, skip this iteration
-        if not has_overflow:
-            # scale the gradients back
-            for param in fp32_weights:
-                if param.grad is not None:
-                    param.grad.div_(self.loss_scaler.loss_scale)
-            if self.grad_clip is not None:
-                self.clip_grads(fp32_weights)
-            # update fp32 params
-            runner.optimizer.step()
-            # copy fp32 params to the fp16 model
-            self.copy_params_to_fp16(runner.model, fp32_weights)
-        self.loss_scaler.update_scale(has_overflow)
-        if has_overflow:
-            runner.logger.warning('Check overflow, downscale loss scale '
-                                  f'to {self.loss_scaler.cur_scale}')
+            has_overflow = self.loss_scaler.has_overflow(fp32_weights)
+            # if has overflow, skip this iteration
+            if not has_overflow:
+                # scale the gradients back
+                for param in fp32_weights:
+                    if param.grad is not None:
+                        param.grad.div_(self.loss_scaler.loss_scale)
+                if self.grad_clip is not None:
+                    self.clip_grads(fp32_weights)
+                # update fp32 params
+                runner.optimizer.step()
+                # copy fp32 params to the fp16 model
+                self.copy_params_to_fp16(runner.model, fp32_weights)
+            self.loss_scaler.update_scale(has_overflow)
+            if has_overflow:
+                runner.logger.warning('Check overflow, downscale loss scale '
+                                      f'to {self.loss_scaler.cur_scale}')
+            runner.model.zero_grad()
+            runner.optimizer.zero_grad()

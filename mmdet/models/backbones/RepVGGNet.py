@@ -9,15 +9,15 @@ from mmdet.ops.build import build_op
 CONV_TYPE = build_op("RepVGGBlock")
 
 class RepVGGStage(nn.Module):
-    def __init__(self, in_ch, stage_ch, num_block, group=1):
+    def __init__(self, in_ch, stage_ch, num_block, kernel_size=3, group=1):
         super(RepVGGStage, self).__init__()
         LayerDict = OrderedDict()
 
         for num in range(num_block):
             if num == 0:
-                LayerDict["Block{}".format(num)] = CONV_TYPE(in_ch, stage_ch, group=group, stride=2)
+                LayerDict["Block{}".format(num)] = CONV_TYPE(in_ch, stage_ch, group=group, kernel_size=kernel_size, stride=2)
                 continue
-            LayerDict["Block{}".format(num)] = CONV_TYPE(stage_ch, stage_ch, group=group, stride=1)
+            LayerDict["Block{}".format(num)] = CONV_TYPE(stage_ch, stage_ch, group=group, kernel_size=kernel_size, stride=1)
         self.Block = nn.Sequential(LayerDict)
 
     def forward(self, x):
@@ -31,10 +31,17 @@ class RepVGGNet(nn.Module):
                  stem_channels,
                  stage_channels,
                  block_per_stage,
+                 kernel_size=3,
                  num_out=5,
                  norm_cfg=dict(type='BN', requires_grad=True)
                  ):
         super(RepVGGNet, self).__init__()
+        if isinstance(kernel_size, int):
+            kernel_sizes = [kernel_size for _ in range(len(stage_channels))]
+        if isinstance(kernel_size, list):
+            assert len(kernel_size) == len(stage_channels), \
+            "if kernel_size is list, len(kernel_size) should == len(stage_channels)"
+            kernel_sizes = kernel_size
 
         assert num_out <= len(stage_channels), 'num output should be less than stage channels!'
 
@@ -48,7 +55,10 @@ class RepVGGNet(nn.Module):
         self.last_stage = len(stage_channels)
         in_channel = stem_channels
         for num_stages in range(self.stage_nums):
-            stage = RepVGGStage(in_channel, stage_channels[num_stages], block_per_stage[num_stages], group=1)
+            stage = RepVGGStage(in_channel, stage_channels[num_stages],
+                                            block_per_stage[num_stages],
+                                            kernel_size=kernel_sizes[num_stages],
+                                            group=1)
             in_channel = stage_channels[num_stages]
             self.stages.append(stage)
 

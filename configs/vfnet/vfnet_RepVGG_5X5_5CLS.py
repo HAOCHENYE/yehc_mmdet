@@ -8,8 +8,9 @@ model = dict(
     backbone=dict(
         type='RepVGGNet',
         stem_channels=64,
-        stage_channels=(32, 64, 72, 96, 128, 192),
+        stage_channels=(64, 64, 72, 96, 128, 192),
         block_per_stage=(1, 3, 6, 8, 6, 6),
+        kernel_size=[5, 5, 5, 5, 5, 5]
         ),
     neck=dict(
         type='YeFPN',
@@ -20,7 +21,7 @@ model = dict(
     bbox_head=dict(
         type='VFNetDeployPrivateHead',
         norm_cfg=dict(type='BN', requires_grad=True),
-        num_classes=4,
+        num_classes=5,
         in_channels=64,
         stacked_convs=2,
         feat_channels=64,
@@ -94,26 +95,26 @@ val_pipline = [
                 ])
         ]
 data = dict(
-    samples_per_gpu=36,
+    samples_per_gpu=40,
     workers_per_gpu=4,
     train=dict(
         type='CocoDataset',
         ann_file=data_root + "coco_half_person_81_train.json",
-        img_prefix=data_root + 'train2017/images',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        img_prefix=data_root + 'train2017/new_images',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'camera'],
         pipeline=train_pipline),
 
     val=dict(
         type='CocoDataset',
         ann_file=data_root + "coco_half_person_81_val.json",
-        img_prefix=data_root + 'val2017/images',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        img_prefix=data_root + 'val2017/new_images',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'camera'],
         pipeline=val_pipline),
     test=dict(
         type='CocoDataset',
         ann_file=data_root + "coco_half_person_81_val.json",
-        img_prefix=data_root + 'val2017/images',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        img_prefix=data_root + 'val2017/new_images',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'camera'],
         pipeline=val_pipline))
 
 evaluation = dict(interval=2, metric='bbox', classwise=True)
@@ -121,7 +122,7 @@ evaluation = dict(interval=2, metric='bbox', classwise=True)
 
 
 optimizer = dict(type='AdamW', lr=0.001)
-optimizer_config = dict(grad_clip=None)
+optimizer_config = dict(update_iter=3, grad_clip=None)
 lr_config = dict(
     policy='step',
     warmup='linear',
@@ -132,7 +133,7 @@ lr_config = dict(
 
 total_epochs = 120
 
-checkpoint_config = dict(interval=1)
+checkpoint_config = dict(interval=2)
 log_config = dict(
     interval=20,
     hooks=[dict(type='TextLoggerHook'),
@@ -146,7 +147,7 @@ log_level = 'INFO'
 # work_dir = 'work_dirs/paa_atss_OSACSP_pafpn_private_SGD_lr0.32_cosine_ema'
 work_dir = 'work_dirs/vfnet_RepVGG_4cls_81cls/'
 load_from = None
-resume_from = None
+resume_from = 'work_dirs/vfnet_RepVGG_4cls_81cls/latest.pth'
 # resume_from = None
 workflow = [('train', 1)]
 gpu_ids = range(0, 2)

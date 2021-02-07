@@ -16,9 +16,10 @@ from .vovnet_lite_normconv import VoVNet_lite_normconv
 from .YL_vovnet import YL_Vovnet
 from .CSPOSANet import CSPOSANet
 from .RepVGGNet import RepVGGNet
+from .resnextDy import ResNeXtDy
 __all__ = [
     'RegNet', 'ResNet', 'ResNetV1d', 'ResNeXt', 'SSDVGG', 'HRNet', 'Res2Net',
     'HourglassNet', 'DetectoRS_ResNet', 'DetectoRS_ResNeXt', 'DarknetV3',
     'VoVNet', 'VoVNet_lite', 'VoVNet_lite_s8', 'VoVNet_lite_normconv', 'YL_Vovnet', 'CSPOSANet',
-    'RepVGGNet'
+    'RepVGGNet', 'ResNeXtDy'
 ]

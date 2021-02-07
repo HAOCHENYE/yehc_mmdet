@@ -69,10 +69,6 @@ test_cfg = dict(
     nms=dict(type='nms', iou_threshold=0.3),
     max_per_img=100)
 # optimizer
-
-
-
-
 train_pipeline = [
     dict(type='LoadImageFromFile', to_float32=True),
     dict(type='LoadAnnotations', with_bbox=True),

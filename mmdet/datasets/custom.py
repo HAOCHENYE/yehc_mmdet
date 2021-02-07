@@ -97,6 +97,9 @@ class CustomDataset(Dataset):
                 self.proposals = [self.proposals[i] for i in valid_inds]
             # set group flag for the sampler
             self._set_group_flag()
+        else:
+            valid_inds = self._filter_imgs()
+            self.data_infos = [self.data_infos[i] for i in valid_inds]
 
         # processing pipeline
         self.pipeline = Compose(pipeline)
@@ -209,11 +212,11 @@ class CustomDataset(Dataset):
         ann_info = self.get_ann_info(idx)
 
         # import cv2
-        # image = cv2.imread(osp.join('/usr/videodate/yehc/ImageDataSets/WIDERFACE/WIDER_train/images', img_info['filename']))
+        # image = cv2.imread(osp.join('/media/traindata/ray/images/train2017', img_info['filename']))
         # bboxes = ann_info['bboxes']
         # for box in bboxes:
         #     cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 0, 255))
-        # cv2.imwrite('../test_imgae/{}'.format(img_info['filename'][-15:]), image)
+        # cv2.imwrite('../test_ray/{}'.format(img_info['filename'][-15:]), image)
 
         results = dict(img_info=img_info, ann_info=ann_info)
         if self.proposals is not None:

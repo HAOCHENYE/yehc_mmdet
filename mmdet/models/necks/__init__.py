@@ -9,6 +9,7 @@ from .rfp import RFP
 from .CSP_pafpn import CSP_PAFPN
 from .YeFPN import YeFPN
 from .fuse_fpn import FuseFPN
+from .YeFPNv2 import YeFPNv2
 __all__ = [
     'FPN', 'BFP', 'HRFPN', 'NASFPN', 'FPN_CARAFE', 'PAFPN', 'NASFCOS_FPN',
     'RFP', 'CSP_PAFPN', 'YeFPN', 'FuseFPN'

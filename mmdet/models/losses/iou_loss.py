@@ -260,6 +260,127 @@ def ciou_loss(pred, target, eps=1e-7):
     loss = 1 - cious
     return loss
 
+@weighted_loss
+def focal_eiou_loss(pred, target, eps=1e-7):
+    r"""`Implementation of paper `Enhancing Geometric Factors into
+    Model Learning and Inference for Object Detection and Instance
+    Segmentation <https://arxiv.org/abs/2005.03572>`_.
+
+    Code is modified from https://github.com/Zzh-tju/CIoU.
+
+    Args:
+        pred (Tensor): Predicted bboxes of format (x1, y1, x2, y2),
+            shape (n, 4).
+        target (Tensor): Corresponding gt bboxes, shape (n, 4).
+        eps (float): Eps to avoid log(0).
+    Return:
+        Tensor: Loss tensor.
+    """
+    # overlap
+    lt = torch.max(pred[:, :2], target[:, :2])
+    rb = torch.min(pred[:, 2:], target[:, 2:])
+    wh = (rb - lt).clamp(min=0)
+    overlap = wh[:, 0] * wh[:, 1]
+
+    # union
+    ap = (pred[:, 2] - pred[:, 0]) * (pred[:, 3] - pred[:, 1])
+    ag = (target[:, 2] - target[:, 0]) * (target[:, 3] - target[:, 1])
+    union = ap + ag - overlap + eps
+
+    # IoU
+    ious = overlap / union
+
+    # enclose area
+    enclose_x1y1 = torch.min(pred[:, :2], target[:, :2])
+    enclose_x2y2 = torch.max(pred[:, 2:], target[:, 2:])
+    enclose_wh = (enclose_x2y2 - enclose_x1y1).clamp(min=0)
+
+    cw = enclose_wh[:, 0]
+    ch = enclose_wh[:, 1]
+
+    c2 = cw**2 + ch**2 + eps
+
+
+    b1_x1, b1_y1 = pred[:, 0], pred[:, 1]
+    b1_x2, b1_y2 = pred[:, 2], pred[:, 3]
+    b2_x1, b2_y1 = target[:, 0], target[:, 1]
+    b2_x2, b2_y2 = target[:, 2], target[:, 3]
+
+    w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1
+    w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1
+
+    left = ((b2_x1 + b2_x2) - (b1_x1 + b1_x2))**2 / 4
+    right = ((b2_y1 + b2_y2) - (b1_y1 + b1_y2))**2 / 4
+
+    rho2 = left + right
+    rhow = (torch.abs(w2-w1)+eps)**2
+    rhoh = (torch.abs(h2-h1)+eps)**2
+
+    gamma = 0.5
+    focal_eiou_loss = (1 - ious + rho2/c2 + rhow / cw**2 + rhoh / ch**2) * iou**gamma
+
+    return focal_eiou_loss
+
+@LOSSES.register_module()
+class FocalEIoULoss(nn.Module):
+    """IoULoss.
+
+    Computing the IoU loss between a set of predicted bboxes and target bboxes.
+
+    Args:
+        eps (float): Eps to avoid log(0).
+        reduction (str): Options are "none", "mean" and "sum".
+        loss_weight (float): Weight of loss.
+    """
+
+    def __init__(self, eps=1e-6, reduction='mean', loss_weight=1.0):
+        super(FocalEIoULoss, self).__init__()
+        self.eps = eps
+        self.reduction = reduction
+        self.loss_weight = loss_weight
+
+    def forward(self,
+                pred,
+                target,
+                weight=None,
+                avg_factor=None,
+                reduction_override=None,
+                **kwargs):
+        """Forward function.
+
+        Args:
+            pred (torch.Tensor): The prediction.
+            target (torch.Tensor): The learning target of the prediction.
+            weight (torch.Tensor, optional): The weight of loss for each
+                prediction. Defaults to None.
+            avg_factor (int, optional): Average factor that is used to average
+                the loss. Defaults to None.
+            reduction_override (str, optional): The reduction method used to
+                override the original reduction method of the loss.
+                Defaults to None. Options are "none", "mean" and "sum".
+        """
+        assert reduction_override in (None, 'none', 'mean', 'sum')
+        reduction = (
+            reduction_override if reduction_override else self.reduction)
+        if (weight is not None) and (not torch.any(weight > 0)) and (
+                reduction != 'none'):
+            return (pred * weight).sum()  # 0
+        if weight is not None and weight.dim() > 1:
+            # TODO: remove this in the future
+            # reduce the weight of shape (n, 4) to (n,) to match the
+            # iou_loss of shape (n,)
+            assert weight.shape == pred.shape
+            weight = weight.mean(-1)
+        loss = self.loss_weight * focal_eiou_loss(
+            pred,
+            target,
+            weight,
+            eps=self.eps,
+            reduction=reduction,
+            avg_factor=avg_factor,
+            **kwargs)
+        return loss
+
 
 @LOSSES.register_module()
 class IoULoss(nn.Module):

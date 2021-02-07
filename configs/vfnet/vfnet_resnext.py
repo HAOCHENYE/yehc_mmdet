@@ -5,31 +5,37 @@ warmup_iters = 2000
 
 model = dict(
     type='GFL',
+    pretrained='torchvision://resnet50',
     backbone=dict(
-        type='RepVGGNet',
-        stem_channels=64,
-        stage_channels=(32, 64, 72, 96, 128, 192),
-        block_per_stage=(1, 3, 6, 8, 6, 6),
-        ),
-    neck=dict(
-        type='YeFPN',
-        in_channels=[64, 72, 96, 128, 192],
-        out_channels=64,
-        conv_cfg=dict(type="NormalConv",
-                       info={"norm_cfg": None})),
-    bbox_head=dict(
-        type='VFNetDeployPrivateHead',
+        type='ResNeXtDy',
+        depth=101,
+        groups=32,
+        base_width=4,
+        num_stages=4,
+        out_indices=(0, 1, 2, 3),
+        frozen_stages=1,
         norm_cfg=dict(type='BN', requires_grad=True),
+        style='pytorch'),
+    neck=dict(
+        type='FPN',
+        in_channels=[256, 512, 1024, 2048],
+        out_channels=256,
+        start_level=1,
+        add_extra_convs=True,
+        extra_convs_on_inputs=False,  # use P5
+        num_outs=5,
+        relu_before_extra_convs=True),
+    bbox_head=dict(
+        type='VFNetHead',
         num_classes=4,
-        in_channels=64,
-        stacked_convs=2,
-        feat_channels=64,
+        in_channels=256,
+        stacked_convs=3,
+        feat_channels=256,
         strides=[8, 16, 32, 64, 128],
         center_sampling=False,
-        dcn_on_last_conv=False,
+        dcn_on_last_conv=True,
         use_atss=True,
         use_vfl=True,
-        # bbox_coder=dict(_delete_=True, type='TBLRBBoxCoder', normalizer=4.0),
         loss_cls=dict(
             type='VarifocalLoss',
             use_sigmoid=True,
@@ -53,12 +59,13 @@ test_cfg = dict(
     nms=dict(type='nms', iou_threshold=0.6),
     max_per_img=100)
 
+
 train_pipline = [
             dict(type='LoadImageFromFile', to_float32=True),
             dict(type='LoadAnnotations', with_bbox=True),
             dict(
                 type='Resize',
-                img_scale=[(1333, 480), (1333, 960)],
+                img_scale=[(256, 256)],
                 multiscale_mode='range',
                 keep_ratio=True),
             dict(type='RandomRadiusBlur', prob=0.3, radius=5, std=0),
@@ -94,43 +101,51 @@ val_pipline = [
                 ])
         ]
 data = dict(
-    samples_per_gpu=36,
+    samples_per_gpu=8,
     workers_per_gpu=4,
     train=dict(
         type='CocoDataset',
         ann_file=data_root + "coco_half_person_81_train.json",
-        img_prefix=data_root + 'train2017/images',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        img_prefix=data_root + 'train2017/new_images',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'camera'],
         pipeline=train_pipline),
 
     val=dict(
         type='CocoDataset',
         ann_file=data_root + "coco_half_person_81_val.json",
-        img_prefix=data_root + 'val2017/images',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        img_prefix=data_root + 'val2017/new_images',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'camera'],
         pipeline=val_pipline),
     test=dict(
         type='CocoDataset',
         ann_file=data_root + "coco_half_person_81_val.json",
-        img_prefix=data_root + 'val2017/images',
-        classes=['person', 'bottle', 'chair', 'potted plant'],
+        img_prefix=data_root + 'val2017/new_images',
+        classes=['person', 'bottle', 'chair', 'potted plant', 'camera'],
         pipeline=val_pipline))
+evaluation = dict(interval=1, metric='bbox', classwise=True)
+# optimizer = dict(type='AdamW', lr=0.001)
+# optimizer_config = dict(grad_clip=None)
+# lr_config = dict(
+#     policy='step',
+#     warmup='linear',
+#     warmup_iters=2000,
+#     warmup_ratio=0.01,
+#     step=[90, 110, 115])
 
-evaluation = dict(interval=2, metric='bbox', classwise=True)
-
-
-
-optimizer = dict(type='AdamW', lr=0.001)
+optimizer = dict(type='SGD',
+                 lr=0.01,
+                 momentum=0.9,
+                 weight_decay=0.0001,
+                 paramwise_cfg=dict(bias_lr_mult=2., bias_decay_mult=0.))
 optimizer_config = dict(grad_clip=None)
+# learning policy
 lr_config = dict(
     policy='step',
     warmup='linear',
-    warmup_iters=2000,
-    warmup_ratio=0.01,
-    step=[90, 110])
-# learning policy
-
-total_epochs = 120
+    warmup_iters=500,
+    warmup_ratio=0.001,
+    step=[16, 22])
+total_epochs = 24
 
 checkpoint_config = dict(interval=1)
 log_config = dict(
@@ -144,7 +159,7 @@ device_ids = range(0, 2)
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 # work_dir = 'work_dirs/paa_atss_OSACSP_pafpn_private_SGD_lr0.32_cosine_ema'
-work_dir = 'work_dirs/vfnet_RepVGG_4cls_81cls/'
+work_dir = 'work_dirs/vfnet_resnext/'
 load_from = None
 resume_from = None
 # resume_from = None
